@@ -1,0 +1,112 @@
+{
+  "theme": "LIGHT",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "design_concept": "Professional BUMN/Corporate Recruitment Dashboard",
+  "typography": {
+    "font_family_headings": "Cabinet Grotesk",
+    "font_family_body": "IBM Plex Sans",
+    "font_family_mono": "JetBrains Mono",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-none font-bold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight leading-tight font-semibold",
+      "h3": "text-xl sm:text-2xl tracking-tight leading-snug font-medium",
+      "h4": "text-lg sm:text-xl tracking-tight font-medium",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm leading-normal",
+      "overline": "text-xs tracking-[0.2em] uppercase font-bold"
+    }
+  },
+  "colors": {
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "text_primary": "#0F172A",
+    "text_secondary": "#64748B",
+    "border": "#E2E8F0",
+    "timeline_stages": {
+      "Applied": { "bg": "#EFF6FF", "text": "#1D4ED8", "border": "#BFDBFE", "color_name": "blue" },
+      "Screening": { "bg": "#FEFCE8", "text": "#A16207", "border": "#FEF08A", "color_name": "yellow" },
+      "Qualified": { "bg": "#F0FDF4", "text": "#15803D", "border": "#BBF7D0", "color_name": "green" },
+      "Assessment": { "bg": "#FFF7ED", "text": "#C2410C", "border": "#FED7AA", "color_name": "orange" },
+      "Online Interview": { "bg": "#FAF5FF", "text": "#7E22CE", "border": "#E9D5FF", "color_name": "purple" },
+      "User Interview": { "bg": "#ECFEFF", "text": "#0E7490", "border": "#A5F3FC", "color_name": "cyan" },
+      "Top Management Interview": { "bg": "#F0F9FF", "text": "#0369A1", "border": "#BAE6FD", "color_name": "light_blue" },
+      "Accepted": { "bg": "#F0FDF4", "text": "#15803D", "border": "#BBF7D0", "color_name": "green" },
+      "Rejected": { "bg": "#FEF2F2", "text": "#B91C1C", "border": "#FECACA", "color_name": "red" },
+      "Gray": { "bg": "#F1F5F9", "text": "#475569", "border": "#CBD5E1", "color_name": "gray" }
+    }
+  },
+  "layout": {
+    "spacing_scale": "Tailwind standard (p-4, p-6, p-8, p-12). Generous padding for containers.",
+    "dashboard_grid": "grid-cols-1 md:grid-cols-12 gap-6",
+    "applicant_dashboard": "Top Navigation (Crystal Glassmorphism) + Centered Main Content Container (max-w-7xl)",
+    "hr_dashboard": "Modern Sidebar (fixed, w-64, border-r) + Main Content Area",
+    "glassmorphism_rules": "bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm"
+  },
+  "components": {
+    "timeline": {
+      "style": "Horizontal animated step progress. Connected by a line.",
+      "active_state": "Pulsing ring or shadow, brightly colored icon.",
+      "completed_state": "Solid color fill, checkmark icon.",
+      "inactive_state": "Grayed out, muted border."
+    },
+    "cards": {
+      "style": "Clean modern, bg-white, border border-slate-200, shadow-sm, rounded-xl.",
+      "hover": "hover:shadow-md hover:border-slate-300 transition-all duration-200"
+    },
+    "buttons": {
+      "primary": "bg-slate-900 text-white hover:bg-slate-800 rounded-lg",
+      "secondary": "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 rounded-lg",
+      "ghost": "hover:bg-slate-100 text-slate-700 rounded-lg"
+    },
+    "tables": {
+      "style": "Clean, border-collapse, subtle gray header backgrounds (bg-slate-50). Data-testid required for rows/cells."
+    },
+    "forms": {
+      "inputs": "Shadcn input style, border-slate-200, focus:ring-2 focus:ring-slate-900 focus:border-slate-900"
+    }
+  },
+  "motion": {
+    "hover": "transition-all duration-200 ease-in-out",
+    "timeline_progress": "Framer motion for width growth on progress bar, staggered entrance for timeline nodes.",
+    "page_transition": "Fade in and slide up slightly (opacity 0 -> 1, y 10 -> 0)"
+  },
+  "media_urls": {
+    "logos": [
+      {
+        "url": "https://images.unsplash.com/photo-1728555864830-499254793e04?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwxfHxjb21wYW55JTIwbG9nbyUyMHByb2Zlc3Npb25hbCUyMG1pbmltYWx8ZW58MHx8fHwxNzc4NjczNDcwfDA&ixlib=rb-4.1.0&q=85",
+        "category": "company_logo",
+        "description": "Minimal professional company logo"
+      }
+    ],
+    "avatars": [
+      {
+        "url": "https://images.pexels.com/photos/20157010/pexels-photo-20157010.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "applicant_avatar",
+        "description": "Professional young male applicant"
+      },
+      {
+        "url": "https://images.pexels.com/photos/35839967/pexels-photo-35839967.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "hr_avatar",
+        "description": "Professional HR manager"
+      }
+    ],
+    "backgrounds": [
+      {
+        "url": "https://images.unsplash.com/photo-1711720743865-10787dd6934a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBvZmZpY2UlMjBidWlsZGluZyUyMGNvcnBvcmF0ZXxlbnwwfHx8fDE3Nzg2NzM0NzB8MA&ixlib=rb-4.1.0&q=85",
+        "category": "login_background",
+        "description": "Professional office building for login page background"
+      }
+    ]
+  },
+  "instructions_to_main_agent": {
+    "file_type": "js",
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute.",
+    "libraries_to_install": [
+      "lucide-react",
+      "framer-motion",
+      "clsx",
+      "tailwind-merge"
+    ],
+    "implementation_notes": "Use Shadcn components heavily for the HR dashboard (tables, forms, dialogs, dropdowns). For the Applicant dashboard, create a custom horizontal timeline using framer-motion. Keep the design clean, high-contrast, and professional (like BUMN or large enterprises). Avoid dark mode unless explicitly toggled, default to light mode."
+  }
+}
