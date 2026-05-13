@@ -1,0 +1,52 @@
+{
+  "summary": "Phase 1: 23/23 pytest backend tests passed. Phase 2: End-to-end Playwright UI testing for both Pelamar and HR flows. Discovered & fixed a critical CandidateDetailDialog crash, then re-verified HR flows (stage change, SAW scores save, schedule tab, chat).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CandidateDetailDialog (HRDashboard.jsx ~L598)",
+        "issue": "Uncaught TypeError: Cannot read properties of null (reading 'applicant_name'). Bug was triggered on FIRST open of any candidate row: state `latestApp` initialized as `useState(app)` with app=null, so first render after parent passes a non-null app prop used `a = latestApp` (still null) before useEffect runs. Fix applied: `const a = latestApp || app;`",
+        "selector": "[data-testid^=open-cand-]",
+        "priority": "CRITICAL_FIXED"
+      },
+      {
+        "component": "DialogContent (multiple)",
+        "issue": "React a11y warning: Missing `Description` or `aria-describedby` for DialogContent. Cosmetic / a11y only.",
+        "selector": "DialogContent",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Add DialogDescription to DialogContent components (HRDashboard candidate dialog, Pelamar apply dialog) for a11y warning cleanup.",
+    "Consider initializing latestApp lazily or with useEffect-derived value to avoid similar future regressions."
+  ],
+  "critical_code_review_comments": [
+    "HRDashboard.jsx is 792 lines — consider splitting CandidateDetailDialog, RankingView, PositionsView into separate files (>700 LOC guideline).",
+    "server.py is 785 lines — borderline; OK for now but routes could be split per resource (positions/applications/saw/...).",
+    "ApplyDialog has both internal+controlled open state — works but a bit unusual; document for maintainers.",
+    "saw_ranking recomputes & writes saw_score on every GET (side-effect on a read endpoint). Could move to an explicit POST /api/saw/recompute and GET being pure-read.",
+    "JWT cookie is set with secure=False; acceptable for preview, but in production must be True."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/HRDashboard.jsx (1-line null-safety fix at L598)",
+    "/app/backend/tests/backend_test.py (new)",
+    "/app/backend/tests/__init__.py (new)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% after fix (Pelamar login, dashboard, timeline, chat send, notification bell present, apply dialog open; HR login, sidebar nav x4, candidate detail dialog open, stage change toast, SAW scores save toast, schedule tab present, chat send, SAW recompute button works)"},
+  "test_credentials": "HR hr@pertacareer.id/hr123456 ; Pelamar pelamar@pertacareer.id/pelamar123 — both valid.",
+  "seed_data_creation": "Seed creates 1 HR, 2 pelamar, 3 positions, 4 applications (idempotent). Verified via /api/stats and /api/applications endpoints.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All backend endpoints stable. The Pelamar demo user already has applications on all 3 seeded positions, so 'duplicate position application' branch is exercised; if you need to test fresh-apply UI flow, register a new pelamar via /auth/register or seed another empty position. The fixed null-safety bug was the only blocker for the HR candidate detail flow.",
+  "rca_of_the_issue": "RCA: useState(app) captures the prop value at first mount only; subsequent prop changes do not re-initialize state, and the conditional render guard checks `app` not `latestApp`, so when parent transitions selectedApp null -> populated, the very first render reads `latestApp = null` and accesses .applicant_name causing TypeError. Reproduction: login as HR, click 'Kelola' on any candidate row. Mitigation: fallback to prop with `const a = latestApp || app;` (already applied)."
+}
