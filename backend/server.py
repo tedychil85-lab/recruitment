@@ -477,16 +477,36 @@ async def update_scores(aid: str, body: ScoresIn, _hr: dict = Depends(require_ro
     return ApplicationOut(**(await _enrich_application(new_doc)))
 
 
-# ---------- SAW ----------
-# All criteria are benefit type (higher is better) per problem statement.
-SAW_WEIGHTS = {
-    "pendidikan": 0.20,
-    "pengalaman": 0.20,
-    "tes_teknis": 0.25,
-    "interview": 0.20,
-    "usia": 0.05,
-    "sertifikasi": 0.10,
+# ---------- SAW (Simple Additive Weighting) ----------
+# Each criterion has: weight (sum must = 1.0) and type ("benefit" or "cost").
+# Benefit -> r_ij = x_ij / max(x_j)
+# Cost    -> r_ij = min(x_j) / x_ij
+# V_i = Σ (w_j * r_ij)
+SAW_CRITERIA = {
+    "pendidikan":  {"weight": 0.20, "type": "benefit", "label": "Pendidikan"},
+    "pengalaman":  {"weight": 0.20, "type": "benefit", "label": "Pengalaman Kerja"},
+    "tes_teknis":  {"weight": 0.25, "type": "benefit", "label": "Tes Teknis"},
+    "interview":   {"weight": 0.20, "type": "benefit", "label": "Interview"},
+    "usia":        {"weight": 0.05, "type": "cost",    "label": "Usia"},
+    "sertifikasi": {"weight": 0.10, "type": "benefit", "label": "Sertifikasi"},
 }
+
+
+@api.get("/saw/info")
+async def saw_info():
+    """Public-ish description of SAW weights & criteria types (for HR UI)."""
+    return {
+        "criteria": [
+            {"key": k, **v} for k, v in SAW_CRITERIA.items()
+        ],
+        "total_weight": round(sum(c["weight"] for c in SAW_CRITERIA.values()), 4),
+        "formulas": {
+            "normalization_benefit": "r_ij = x_ij / max(x_j)",
+            "normalization_cost": "r_ij = min(x_j) / x_ij",
+            "weighted": "v_ij = w_j * r_ij",
+            "final": "V_i = Σ (w_j * r_ij)  for j = 1..n",
+        },
+    }
 
 
 @api.get("/saw/ranking")
@@ -498,19 +518,40 @@ async def saw_ranking(position_id: Optional[str] = None, _hr: dict = Depends(req
     rows = [r for r in rows if r.get("scores")]
     if not rows:
         return []
-    # Build matrix
-    criteria = list(SAW_WEIGHTS.keys())
-    maxv = {c: max((r["scores"].get(c, 0) or 0) for r in rows) or 1 for c in criteria}
+
+    criteria = list(SAW_CRITERIA.keys())
+    # Build decision matrix
+    matrix = {c: [(r["scores"].get(c, 0) or 0) for r in rows] for c in criteria}
+    maxv = {c: (max(matrix[c]) if matrix[c] else 0) for c in criteria}
+    # For cost criteria, smallest non-zero matters; if all zeros, fallback to 1 to avoid div/0
+    minv = {c: (min([v for v in matrix[c] if v > 0]) if any(v > 0 for v in matrix[c]) else 0) for c in criteria}
+
     ranked = []
-    for r in rows:
-        score = 0.0
+    for idx, r in enumerate(rows):
+        normalized = {}
+        weighted = {}
+        v_total = 0.0
         for c in criteria:
-            v = r["scores"].get(c, 0) or 0
-            score += SAW_WEIGHTS[c] * (v / maxv[c])
-        await db.applications.update_one({"id": r["id"]}, {"$set": {"saw_score": round(score, 4)}})
+            cfg = SAW_CRITERIA[c]
+            x = r["scores"].get(c, 0) or 0
+            if cfg["type"] == "benefit":
+                denom = maxv[c] or 1
+                norm = x / denom
+            else:  # cost
+                # r_ij = min / x  ; if x is 0 -> norm = 0 (avoid div/0)
+                norm = (minv[c] / x) if x > 0 else 0
+            normalized[c] = round(norm, 4)
+            w = cfg["weight"] * norm
+            weighted[c] = round(w, 4)
+            v_total += w
+        v_total = round(v_total, 4)
+        await db.applications.update_one({"id": r["id"]}, {"$set": {"saw_score": v_total}})
         enriched = await _enrich_application(r)
-        enriched["saw_score"] = round(score, 4)
+        enriched["saw_score"] = v_total
+        enriched["normalized"] = normalized
+        enriched["weighted"] = weighted
         ranked.append(enriched)
+
     ranked.sort(key=lambda x: x["saw_score"], reverse=True)
     for i, row in enumerate(ranked):
         row["rank"] = i + 1

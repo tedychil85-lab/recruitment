@@ -219,15 +219,82 @@ class TestSAW:
         r = pel_client.get(f"{API}/saw/ranking")
         assert r.status_code == 403
 
-    def test_ranking_returns_sorted(self, hr_client):
+    def test_saw_info_schema(self, hr_client):
+        # Iteration 2: /api/saw/info should expose criteria with types + formulas
+        r = requests.get(f"{API}/saw/info")
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert "criteria" in d and isinstance(d["criteria"], list)
+        keys = {c["key"] for c in d["criteria"]}
+        assert keys == {"pendidikan", "pengalaman", "tes_teknis", "interview", "usia", "sertifikasi"}
+        # types
+        types = {c["key"]: c["type"] for c in d["criteria"]}
+        assert types["usia"] == "cost"
+        for k in ("pendidikan", "pengalaman", "tes_teknis", "interview", "sertifikasi"):
+            assert types[k] == "benefit", f"{k} should be benefit"
+        # weights sum to 1.0
+        assert abs(d["total_weight"] - 1.0) < 1e-6
+        # formulas keys
+        f = d["formulas"]
+        for k in ("normalization_benefit", "normalization_cost", "weighted", "final"):
+            assert k in f and isinstance(f[k], str)
+
+    def test_ranking_returns_sorted_with_breakdown(self, hr_client):
         r = hr_client.get(f"{API}/saw/ranking")
         assert r.status_code == 200, r.text
         rows = r.json()
         assert isinstance(rows, list)
-        if len(rows) >= 2:
-            for i in range(len(rows) - 1):
-                assert rows[i]["saw_score"] >= rows[i + 1]["saw_score"]
-            assert rows[0]["rank"] == 1
+        if not rows:
+            pytest.skip("No applications with scores")
+        # each row must have normalized + weighted dicts for all 6 criteria
+        criteria = ["pendidikan", "pengalaman", "tes_teknis", "interview", "usia", "sertifikasi"]
+        for row in rows:
+            assert "normalized" in row and "weighted" in row and "saw_score" in row and "rank" in row
+            for c in criteria:
+                assert c in row["normalized"], f"missing normalized.{c}"
+                assert c in row["weighted"], f"missing weighted.{c}"
+                assert 0 <= row["normalized"][c] <= 1.0 + 1e-6
+            # V_i = sum of weighted values (within rounding tolerance)
+            weighted_sum = round(sum(row["weighted"].values()), 4)
+            assert abs(weighted_sum - row["saw_score"]) < 0.01, (
+                f"saw_score {row['saw_score']} != sum(weighted)={weighted_sum}"
+            )
+        # sorted descending
+        for i in range(len(rows) - 1):
+            assert rows[i]["saw_score"] >= rows[i + 1]["saw_score"]
+        assert rows[0]["rank"] == 1
+
+    def test_benefit_cost_normalization_math(self, hr_client):
+        """Verify benefit r=x/max and cost r=min/x against actual returned data."""
+        info = requests.get(f"{API}/saw/info").json()
+        type_map = {c["key"]: c["type"] for c in info["criteria"]}
+        weight_map = {c["key"]: c["weight"] for c in info["criteria"]}
+
+        rows = hr_client.get(f"{API}/saw/ranking").json()
+        if not rows:
+            pytest.skip("No SAW data")
+        # Build per-criterion arrays from raw scores
+        criteria = list(type_map.keys())
+        raw = {c: [(r.get("scores") or {}).get(c, 0) or 0 for r in rows] for c in criteria}
+        maxv = {c: max(raw[c]) if raw[c] else 0 for c in criteria}
+        minv = {
+            c: (min([v for v in raw[c] if v > 0]) if any(v > 0 for v in raw[c]) else 0)
+            for c in criteria
+        }
+        for r in rows:
+            for c in criteria:
+                x = (r.get("scores") or {}).get(c, 0) or 0
+                if type_map[c] == "benefit":
+                    expected = (x / maxv[c]) if maxv[c] else 0
+                else:  # cost
+                    expected = (minv[c] / x) if x > 0 else 0
+                got = r["normalized"][c]
+                assert abs(got - expected) < 1e-3, (
+                    f"row={r['id']} c={c} type={type_map[c]} x={x} got={got} expected={expected}"
+                )
+                # weighted = w * normalized
+                expected_w = weight_map[c] * expected
+                assert abs(r["weighted"][c] - expected_w) < 1e-3
 
 
 # ---------- Interviews ----------

@@ -349,49 +349,148 @@ function CandidatesView({ apps, search, setSearch, stageFilter, setStageFilter, 
 /* ---------- Ranking SAW ---------- */
 function RankingView({ ranking, positions, onReload }) {
   const [positionId, setPositionId] = useState("all");
+  const [list, setList] = useState(ranking);
+  const [info, setInfo] = useState(null);
+  const [matrixMode, setMatrixMode] = useState("raw"); // raw | normalized | weighted
+  const [showDetail, setShowDetail] = useState(null);
 
-  const fetchFiltered = async () => {
-    const params = positionId !== "all" ? { position_id: positionId } : {};
+  useEffect(() => { setList(ranking); }, [ranking]);
+  useEffect(() => {
+    api.get("/saw/info").then(({ data }) => setInfo(data));
+    onReload?.();
+    /* eslint-disable-next-line */
+  }, []);
+
+  const reload = async (pid = positionId) => {
+    const params = pid !== "all" ? { position_id: pid } : {};
     const { data } = await api.get("/saw/ranking", { params });
-    return data;
+    setList(data);
   };
 
-  const [list, setList] = useState(ranking);
-  useEffect(() => { setList(ranking); }, [ranking]);
+  const criteria = info?.criteria ?? [];
 
-  useEffect(() => { onReload?.(); /* eslint-disable-next-line */ }, []);
+  const valueFor = (row, key) => {
+    if (matrixMode === "raw") return row.scores?.[key];
+    if (matrixMode === "normalized") return row.normalized?.[key];
+    if (matrixMode === "weighted") return row.weighted?.[key];
+    return undefined;
+  };
+
+  const fmt = (v) => {
+    if (v == null || v === "") return "—";
+    if (matrixMode === "raw") return v;
+    return Number(v).toFixed(3);
+  };
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xs uppercase tracking-widest font-bold text-slate-500">Metode SAW</div>
-          <div className="font-display text-lg font-semibold">Ranking Kandidat</div>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Bobot: Pendidikan 20% · Pengalaman 20% · Tes Teknis 25% · Interview 20% · Usia 5% · Sertifikasi 10%.
-          </p>
+      {/* Formula card */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-widest font-bold text-slate-500">Metode SAW</div>
+            <div className="font-display text-xl font-semibold">Simple Additive Weighting</div>
+            <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+              Setiap kriteria dinormalisasi sesuai jenisnya (benefit / cost), dikalikan bobot, lalu dijumlah menjadi skor akhir <span className="font-mono">V<sub>i</sub></span>.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={positionId} onValueChange={(v) => { setPositionId(v); reload(v); }}>
+              <SelectTrigger className="h-10 w-56" data-testid="ranking-position-filter">
+                <SelectValue placeholder="Semua posisi" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua posisi</SelectItem>
+                {positions.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button className="bg-slate-900 hover:bg-slate-800 text-white" onClick={() => reload()}
+                    data-testid="recompute-saw-btn">
+              <BarChart3 size={14} className="mr-1.5" /> Hitung Ulang
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={positionId} onValueChange={async (v) => { setPositionId(v); setList(await (async () => {
-            const params = v !== "all" ? { position_id: v } : {};
-            const { data } = await api.get("/saw/ranking", { params });
-            return data;
-          })()); }}>
-            <SelectTrigger className="h-10 w-56" data-testid="ranking-position-filter">
-              <SelectValue placeholder="Semua posisi" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua posisi</SelectItem>
-              {positions.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button className="bg-slate-900 hover:bg-slate-800 text-white" onClick={async () => setList(await fetchFiltered())}
-                  data-testid="recompute-saw-btn">
-            <BarChart3 size={14} className="mr-1.5" /> Hitung Ulang
-          </Button>
+
+        <div className="mt-4 grid md:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500">1. Normalisasi</div>
+            <div className="mt-2 space-y-1.5 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-semibold text-[10px]">BENEFIT</span>
+                <span className="font-mono text-slate-700">r<sub>ij</sub> = x<sub>ij</sub> / max(x<sub>j</sub>)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 font-semibold text-[10px]">COST</span>
+                <span className="font-mono text-slate-700">r<sub>ij</sub> = min(x<sub>j</sub>) / x<sub>ij</sub></span>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500">2. Terbobot & Skor Akhir</div>
+            <div className="mt-2 space-y-1.5 text-xs">
+              <div className="font-mono text-slate-700">v<sub>ij</sub> = w<sub>j</sub> · r<sub>ij</sub></div>
+              <div className="font-mono text-slate-900 font-semibold">V<sub>i</sub> = Σ (w<sub>j</sub> · r<sub>ij</sub>),  j = 1..n</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Criteria weights table */}
+        <div className="mt-4 overflow-x-auto" data-testid="saw-criteria-table">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50">
+                <TableHead>Kriteria</TableHead>
+                <TableHead>Tipe</TableHead>
+                <TableHead className="text-right">Bobot (w)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {criteria.map((c) => (
+                <TableRow key={c.key}>
+                  <TableCell className="font-medium text-slate-900">{c.label}</TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider ${
+                      c.type === "benefit" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                    }`}>{c.type}</span>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">{(c.weight * 100).toFixed(0)}%</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-slate-50">
+                <TableCell colSpan={2} className="text-right text-xs uppercase tracking-widest font-bold text-slate-500">Total</TableCell>
+                <TableCell className="text-right font-mono font-bold">
+                  {info ? (info.total_weight * 100).toFixed(0) : "—"}%
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
       </div>
 
+      {/* View mode toggle */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 flex items-center gap-2 flex-wrap">
+        <div className="text-xs uppercase tracking-widest font-bold text-slate-500 mr-2">Tampilan Matriks:</div>
+        {[
+          { k: "raw", label: "Nilai Asli (x)" },
+          { k: "normalized", label: "Normalisasi (r)" },
+          { k: "weighted", label: "Terbobot (v = w·r)" },
+        ].map((m) => (
+          <button
+            key={m.k}
+            onClick={() => setMatrixMode(m.k)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
+              matrixMode === m.k
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            }`}
+            data-testid={`matrix-mode-${m.k}`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Ranking table */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-x-auto">
         <Table>
           <TableHeader>
@@ -399,13 +498,20 @@ function RankingView({ ranking, positions, onReload }) {
               <TableHead className="w-14">Rank</TableHead>
               <TableHead>Kandidat</TableHead>
               <TableHead>Posisi</TableHead>
-              <TableHead>Pendidikan</TableHead>
-              <TableHead>Pengalaman</TableHead>
-              <TableHead>Tes</TableHead>
-              <TableHead>Interview</TableHead>
-              <TableHead>Usia</TableHead>
-              <TableHead>Sertif.</TableHead>
-              <TableHead className="text-right">Skor</TableHead>
+              {criteria.map((c) => (
+                <TableHead key={c.key} className="text-right">
+                  <div className="flex flex-col items-end">
+                    <span>{c.label}</span>
+                    <span className={`text-[9px] uppercase tracking-wider font-bold mt-0.5 ${
+                      c.type === "benefit" ? "text-emerald-600" : "text-rose-600"
+                    }`}>
+                      {c.type} · {(c.weight * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </TableHead>
+              ))}
+              <TableHead className="text-right">V<sub>i</sub></TableHead>
+              <TableHead className="text-right">Detail</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -423,23 +529,82 @@ function RankingView({ ranking, positions, onReload }) {
                 </TableCell>
                 <TableCell className="font-semibold text-slate-900">{r.applicant_name}</TableCell>
                 <TableCell className="text-sm text-slate-600">{r.position_title}</TableCell>
-                <TableCell>{r.scores?.pendidikan ?? "—"}</TableCell>
-                <TableCell>{r.scores?.pengalaman ?? "—"}</TableCell>
-                <TableCell>{r.scores?.tes_teknis ?? "—"}</TableCell>
-                <TableCell>{r.scores?.interview ?? "—"}</TableCell>
-                <TableCell>{r.scores?.usia ?? "—"}</TableCell>
-                <TableCell>{r.scores?.sertifikasi ?? "—"}</TableCell>
-                <TableCell className="text-right font-display font-bold text-slate-900">{r.saw_score?.toFixed(3)}</TableCell>
+                {criteria.map((c) => (
+                  <TableCell key={c.key} className="text-right font-mono text-slate-700"
+                             data-testid={`cell-${r.id}-${c.key}`}>
+                    {fmt(valueFor(r, c.key))}
+                  </TableCell>
+                ))}
+                <TableCell className="text-right font-display font-bold text-slate-900">
+                  {r.saw_score?.toFixed(4)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" onClick={() => setShowDetail(r)} data-testid={`detail-${r.id}`}>
+                    Breakdown
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {list.length === 0 && (
-              <TableRow><TableCell colSpan={10} className="text-center py-10 text-sm text-slate-400">
+              <TableRow><TableCell colSpan={4 + criteria.length} className="text-center py-10 text-sm text-slate-400">
                 Belum ada kandidat yang dinilai. Input nilai pada panel "Kelola Kandidat".
               </TableCell></TableRow>
             )}
           </TableBody>
         </Table>
       </div>
+
+      {/* Detail breakdown dialog */}
+      <Dialog open={!!showDetail} onOpenChange={(o) => !o && setShowDetail(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display">Breakdown SAW — {showDetail?.applicant_name}</DialogTitle>
+          </DialogHeader>
+          {showDetail && (
+            <div className="space-y-3">
+              <div className="text-xs text-slate-500">{showDetail.position_title} · Rank #{showDetail.rank}</div>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead>Kriteria</TableHead>
+                    <TableHead>Tipe</TableHead>
+                    <TableHead className="text-right">x (asli)</TableHead>
+                    <TableHead className="text-right">r (normal)</TableHead>
+                    <TableHead className="text-right">w</TableHead>
+                    <TableHead className="text-right">v = w·r</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {criteria.map((c) => (
+                    <TableRow key={c.key}>
+                      <TableCell className="font-medium">{c.label}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase ${
+                          c.type === "benefit" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                        }`}>{c.type}</span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{showDetail.scores?.[c.key] ?? "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{showDetail.normalized?.[c.key]?.toFixed(4) ?? "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{c.weight.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-slate-900">
+                        {showDetail.weighted?.[c.key]?.toFixed(4) ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-slate-900 text-white">
+                    <TableCell colSpan={5} className="text-right text-xs uppercase tracking-widest font-bold">
+                      V<sub>i</sub> = Σ(w · r)
+                    </TableCell>
+                    <TableCell className="text-right font-display font-bold">
+                      {showDetail.saw_score?.toFixed(4)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -655,20 +820,29 @@ function CandidateDetailDialog({ app, onClose, onChanged, currentUser }) {
               <div className="text-xs uppercase tracking-widest font-bold text-slate-500 mb-2">Input nilai (0–100)</div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
-                  ["pendidikan", "Pendidikan"],
-                  ["pengalaman", "Pengalaman Kerja"],
-                  ["tes_teknis", "Tes Teknis"],
-                  ["interview", "Interview"],
-                  ["usia", "Usia"],
-                  ["sertifikasi", "Sertifikasi"],
-                ].map(([k, label]) => (
+                  ["pendidikan", "Pendidikan", "benefit", "20%"],
+                  ["pengalaman", "Pengalaman Kerja", "benefit", "20%"],
+                  ["tes_teknis", "Tes Teknis", "benefit", "25%"],
+                  ["interview", "Interview", "benefit", "20%"],
+                  ["usia", "Usia (tahun)", "cost", "5%"],
+                  ["sertifikasi", "Sertifikasi", "benefit", "10%"],
+                ].map(([k, label, type, weight]) => (
                   <div key={k} className="space-y-1.5">
-                    <Label>{label}</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>{label}</Label>
+                      <span className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${
+                        type === "benefit" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                      }`}>{type} · {weight}</span>
+                    </div>
                     <Input type="number" min={0} max={100} value={scores[k]}
                            onChange={(e) => setScores({ ...scores, [k]: Number(e.target.value) })}
                            data-testid={`score-${k}`} className="h-10" />
                   </div>
                 ))}
+              </div>
+              <div className="mt-3 text-xs text-slate-500">
+                <span className="font-semibold">Catatan:</span> Kriteria <span className="px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">benefit</span> = semakin besar semakin baik.
+                Kriteria <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-700 font-semibold">cost</span> = semakin kecil semakin baik (mis. usia).
               </div>
               <div className="mt-4 flex justify-end">
                 <Button onClick={saveScores} disabled={busy}
