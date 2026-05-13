@@ -61,6 +61,7 @@ export default function HRDashboard() {
   const [stageFilter, setStageFilter] = useState("all");
 
   const [selectedApp, setSelectedApp] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const loadAll = useCallback(async () => {
     const [a, p, s] = await Promise.all([
@@ -169,6 +170,7 @@ export default function HRDashboard() {
               search={search} setSearch={setSearch}
               stageFilter={stageFilter} setStageFilter={setStageFilter}
               onOpenCandidate={setSelectedApp}
+              onDelete={setPendingDelete}
             />
           )}
           {view === "ranking" && <RankingView ranking={ranking} positions={positions} onReload={loadRanking} />}
@@ -181,9 +183,62 @@ export default function HRDashboard() {
         app={selectedApp}
         onClose={() => setSelectedApp(null)}
         onChanged={loadAll}
+        onDelete={(a) => { setSelectedApp(null); setPendingDelete(a); }}
         currentUser={user}
       />
+
+      {/* Delete confirm dialog */}
+      <DeleteCandidateDialog
+        app={pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirmed={() => { setPendingDelete(null); loadAll(); }}
+      />
     </div>
+  );
+}
+
+/* ---------- Delete confirm ---------- */
+function DeleteCandidateDialog({ app, onClose, onConfirmed }) {
+  const [busy, setBusy] = useState(false);
+  if (!app) return null;
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      await api.delete(`/applications/${app.id}`);
+      toast.success(`Kandidat "${app.applicant_name}" dihapus`);
+      onConfirmed?.();
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Gagal menghapus kandidat");
+    } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open={!!app} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display flex items-center gap-2 text-rose-700">
+            <Trash2 size={18} /> Hapus kandidat ditolak?
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm text-slate-700">
+          <p>
+            Anda akan menghapus permanen lamaran <span className="font-semibold">{app.applicant_name}</span>{" "}
+            untuk posisi <span className="font-semibold">{app.position_title}</span>.
+          </p>
+          <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700">
+            Tindakan ini juga akan menghapus seluruh riwayat pesan dan jadwal interview kandidat tersebut. Tidak dapat dibatalkan.
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={onClose} data-testid="delete-cancel-btn">Batal</Button>
+          <Button onClick={confirm} disabled={busy}
+                  className="bg-rose-600 hover:bg-rose-700 text-white"
+                  data-testid="delete-confirm-btn">
+            {busy ? "Menghapus…" : "Ya, hapus permanen"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -275,7 +330,7 @@ function OverviewView({ stats, apps, onJump }) {
 }
 
 /* ---------- Candidates ---------- */
-function CandidatesView({ apps, search, setSearch, stageFilter, setStageFilter, onOpenCandidate }) {
+function CandidatesView({ apps, search, setSearch, stageFilter, setStageFilter, onOpenCandidate, onDelete }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
       <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
@@ -328,11 +383,22 @@ function CandidatesView({ apps, search, setSearch, stageFilter, setStageFilter, 
                 <TableCell className="text-xs text-slate-600">{formatDate(a.applied_at)}</TableCell>
                 <TableCell><StageBadge stage={a.stage} /></TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" onClick={() => onOpenCandidate(a)}
-                          className="text-slate-700"
-                          data-testid={`open-cand-${a.id}`}>
-                    Kelola <ChevronRight size={14} className="ml-1" />
-                  </Button>
+                  <div className="inline-flex items-center gap-1 justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => onOpenCandidate(a)}
+                            className="text-slate-700"
+                            data-testid={`open-cand-${a.id}`}>
+                      Kelola <ChevronRight size={14} className="ml-1" />
+                    </Button>
+                    {a.stage === "rejected" && (
+                      <Button variant="ghost" size="sm"
+                              onClick={() => onDelete?.(a)}
+                              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                              data-testid={`delete-cand-${a.id}`}
+                              title="Hapus kandidat yang ditolak">
+                        <Trash2 size={14} />
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -693,7 +759,7 @@ function PositionsView({ positions, reload }) {
 }
 
 /* ---------- Candidate detail dialog (stage / scores / interview / chat) ---------- */
-function CandidateDetailDialog({ app, onClose, onChanged, currentUser }) {
+function CandidateDetailDialog({ app, onClose, onChanged, onDelete, currentUser }) {
   const [busy, setBusy] = useState(false);
   const [scores, setScores] = useState({ pendidikan: 0, pengalaman: 0, tes_teknis: 0, interview: 0, usia: 0, sertifikasi: 0 });
   const [interviewForm, setInterviewForm] = useState({ type: "online_interview", scheduled_at: "", meeting_link: "", location: "", notes: "" });
@@ -774,7 +840,21 @@ function CandidateDetailDialog({ app, onClose, onChanged, currentUser }) {
               <div>{a.applicant_name}</div>
               <div className="text-xs font-normal text-slate-500">{a.applicant_email} · {a.applicant_phone || "—"}</div>
             </div>
-            <div className="ml-auto"><StageBadge stage={a.stage} /></div>
+            <div className="ml-auto flex items-center gap-2">
+              <StageBadge stage={a.stage} />
+              {a.stage === "rejected" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDelete?.(a)}
+                  className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                  data-testid="dlg-delete-cand-btn"
+                  title="Hapus kandidat ditolak"
+                >
+                  <Trash2 size={14} className="mr-1" /> Hapus
+                </Button>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
 

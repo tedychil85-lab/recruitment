@@ -477,6 +477,26 @@ async def update_scores(aid: str, body: ScoresIn, _hr: dict = Depends(require_ro
     return ApplicationOut(**(await _enrich_application(new_doc)))
 
 
+@api.delete("/applications/{aid}")
+async def delete_application(aid: str, _hr: dict = Depends(require_role("hr"))):
+    """Hapus lamaran. Untuk keamanan data, hanya lamaran dengan stage
+    'rejected' yang boleh dihapus oleh HR.
+    """
+    doc = await db.applications.find_one({"id": aid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if doc.get("stage") != "rejected":
+        raise HTTPException(
+            status_code=400,
+            detail="Hanya kandidat dengan status 'Rejected' yang dapat dihapus",
+        )
+    await db.applications.delete_one({"id": aid})
+    # Bersihkan data terkait
+    await db.messages.delete_many({"application_id": aid})
+    await db.interviews.delete_many({"application_id": aid})
+    return {"ok": True, "deleted_id": aid}
+
+
 # ---------- SAW (Simple Additive Weighting) ----------
 # Each criterion has: weight (sum must = 1.0) and type ("benefit" or "cost").
 # Benefit -> r_ij = x_ij / max(x_j)
