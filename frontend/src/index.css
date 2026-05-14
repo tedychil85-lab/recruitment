@@ -64,6 +64,29 @@
 .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 
+/* ----- Print layout (for SAW ranking report) ----- */
+.print-only { display: none; }
+@media print {
+  @page { size: A4 landscape; margin: 14mm 12mm; }
+  body { background: #fff !important; }
+  /* Hide chrome (sidebar, header, top bar, buttons, filters, formula cards) */
+  aside, header, .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  /* Force show ranking section full-width */
+  .print-area {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+  .print-area * { color: #000 !important; }
+  table { font-size: 11px; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  .print-break { page-break-after: always; }
+}
+
 /* Animated dot for active stage */
 @keyframes pulseRing {
   0% { box-shadow: 0 0 0 0 currentColor; }

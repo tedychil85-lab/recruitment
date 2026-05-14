@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   LogOut, LayoutDashboard, Users, BarChart3, Briefcase, Calendar,
-  Search, ChevronRight, Award, MessageSquare, ClipboardList, Plus, Trash2,
+  Search, ChevronRight, Award, MessageSquare, ClipboardList, Plus, Trash2, Printer,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -455,19 +455,51 @@ function RankingView({ ranking, positions, onReload }) {
     return Number(v).toFixed(3);
   };
 
+  const selectedPositionLabel =
+    positionId === "all"
+      ? "Semua Posisi"
+      : (positions.find((p) => p.id === positionId)?.title ?? "—");
+
+  const printedAt = new Date().toLocaleString("id-ID", { dateStyle: "full", timeStyle: "short" });
+
   return (
     <div className="space-y-4">
-      {/* Formula card */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      {/* Print-only header (visible only when printing) */}
+      <div className="print-only" data-testid="print-header">
+        <div style={{ borderBottom: "2px solid #0F172A", paddingBottom: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: 2, fontWeight: 700, textTransform: "uppercase" }}>
+                Pertacareer · Recruitment System
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
+                LAPORAN RANKING KANDIDAT — METODE SAW
+              </div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>
+                Untuk: <b>Top Management</b> · Bersifat Rahasia (Confidential)
+              </div>
+            </div>
+            <div style={{ textAlign: "right", fontSize: 10 }}>
+              <div><b>Posisi:</b> {selectedPositionLabel}</div>
+              <div><b>Dicetak:</b> {printedAt}</div>
+              <div><b>Total kandidat:</b> {list.length}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Formula card (hidden on print) */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 no-print">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-widest font-bold text-slate-500">Metode SAW</div>
             <div className="font-display text-xl font-semibold">Simple Additive Weighting</div>
             <p className="text-xs text-slate-500 mt-1 max-w-2xl">
               Setiap kriteria dinormalisasi sesuai jenisnya (benefit / cost), dikalikan bobot, lalu dijumlah menjadi skor akhir <span className="font-mono">V<sub>i</sub></span>.
+              <span className="block mt-1 text-rose-600">Catatan: kandidat yang sudah <b>Accepted</b> otomatis tidak ditampilkan di ranking.</span>
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Select value={positionId} onValueChange={(v) => { setPositionId(v); reload(v); }}>
               <SelectTrigger className="h-10 w-56" data-testid="ranking-position-filter">
                 <SelectValue placeholder="Semua posisi" />
@@ -480,6 +512,11 @@ function RankingView({ ranking, positions, onReload }) {
             <Button className="bg-slate-900 hover:bg-slate-800 text-white" onClick={() => reload()}
                     data-testid="recompute-saw-btn">
               <BarChart3 size={14} className="mr-1.5" /> Hitung Ulang
+            </Button>
+            <Button variant="outline" onClick={() => window.print()}
+                    className="border-slate-300"
+                    data-testid="print-ranking-btn">
+              <Printer size={14} className="mr-1.5" /> Cetak Laporan
             </Button>
           </div>
         </div>
@@ -540,8 +577,8 @@ function RankingView({ ranking, positions, onReload }) {
         </div>
       </div>
 
-      {/* View mode toggle */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 flex items-center gap-2 flex-wrap">
+      {/* View mode toggle (hidden on print) */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 flex items-center gap-2 flex-wrap no-print">
         <div className="text-xs uppercase tracking-widest font-bold text-slate-500 mr-2">Tampilan Matriks:</div>
         {[
           { k: "raw", label: "Nilai Asli (x)" },
@@ -563,8 +600,8 @@ function RankingView({ ranking, positions, onReload }) {
         ))}
       </div>
 
-      {/* Ranking table */}
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-x-auto">
+      {/* Ranking table (this is the print area) */}
+      <div className="rounded-2xl border border-slate-200 bg-white overflow-x-auto print-area">
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">
@@ -584,7 +621,7 @@ function RankingView({ ranking, positions, onReload }) {
                 </TableHead>
               ))}
               <TableHead className="text-right">V<sub>i</sub></TableHead>
-              <TableHead className="text-right">Detail</TableHead>
+              <TableHead className="text-right no-print">Detail</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -611,7 +648,7 @@ function RankingView({ ranking, positions, onReload }) {
                 <TableCell className="text-right font-display font-bold text-slate-900">
                   {r.saw_score?.toFixed(4)}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right no-print">
                   <Button variant="ghost" size="sm" onClick={() => setShowDetail(r)} data-testid={`detail-${r.id}`}>
                     Breakdown
                   </Button>
@@ -625,6 +662,31 @@ function RankingView({ ranking, positions, onReload }) {
             )}
           </TableBody>
         </Table>
+
+        {/* Print-only signature block */}
+        <div className="print-only" style={{ marginTop: 30, padding: "0 8px" }}>
+          <div style={{ fontSize: 10, color: "#475569", marginBottom: 18 }}>
+            * Skor V<sub>i</sub> dihitung menggunakan metode Simple Additive Weighting (SAW) dengan bobot kriteria sesuai konfigurasi sistem.
+            Ranking ini bersifat rekomendasi dan keputusan akhir ada pada manajemen.
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+            <div style={{ width: 200, textAlign: "center" }}>
+              <div style={{ fontSize: 11 }}>Disusun oleh,</div>
+              <div style={{ height: 60 }} />
+              <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11 }}>HR / Recruiter</div>
+            </div>
+            <div style={{ width: 200, textAlign: "center" }}>
+              <div style={{ fontSize: 11 }}>Mengetahui,</div>
+              <div style={{ height: 60 }} />
+              <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11 }}>HR Manager</div>
+            </div>
+            <div style={{ width: 200, textAlign: "center" }}>
+              <div style={{ fontSize: 11 }}>Menyetujui,</div>
+              <div style={{ height: 60 }} />
+              <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11 }}>Top Management</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Detail breakdown dialog */}

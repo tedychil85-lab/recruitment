@@ -531,7 +531,9 @@ async def saw_info():
 
 @api.get("/saw/ranking")
 async def saw_ranking(position_id: Optional[str] = None, _hr: dict = Depends(require_role("hr"))):
-    q = {"scores": {"$ne": {}}}
+    # Hanya tampilkan kandidat yang masih aktif dievaluasi.
+    # Kandidat yang sudah `accepted` otomatis keluar dari ranking SAW.
+    q = {"scores": {"$ne": {}}, "stage": {"$ne": "accepted"}}
     if position_id:
         q["position_id"] = position_id
     rows = await db.applications.find(q, {"_id": 0}).to_list(500)
