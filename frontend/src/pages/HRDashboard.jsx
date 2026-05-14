@@ -247,7 +247,12 @@ function OverviewView({ stats, apps, onJump }) {
   if (!stats) return null;
   const recent = apps.slice(0, 6);
   const cards = [
-    { label: "Total Pelamar", n: stats.total_pelamar, k: "candidates" },
+    {
+      label: "Pelamar Aktif",
+      n: stats.total_pelamar,
+      sub: stats.total_pelamar_all != null ? `dari ${stats.total_pelamar_all} terdaftar` : null,
+      k: "candidates",
+    },
     { label: "Lowongan Aktif", n: stats.total_positions, k: "positions" },
     { label: "Total Lamaran", n: stats.total_applications, k: "candidates" },
     { label: "Diterima", n: stats.accepted, k: "ranking" },
@@ -258,9 +263,11 @@ function OverviewView({ stats, apps, onJump }) {
         {cards.map((c) => (
           <button key={c.label}
                   onClick={() => onJump(c.k)}
+                  data-testid={`stat-${c.label.toLowerCase().replace(/\s+/g, "-")}`}
                   className="text-left rounded-xl border border-slate-200 bg-white p-5 hover:shadow-md hover:border-slate-300 transition-all">
             <div className="text-xs uppercase tracking-widest font-bold text-slate-500">{c.label}</div>
             <div className="font-display text-3xl font-bold mt-2 text-slate-900">{c.n}</div>
+            {c.sub && <div className="text-[11px] text-slate-500 mt-1">{c.sub}</div>}
           </button>
         ))}
       </div>

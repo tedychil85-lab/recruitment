@@ -688,13 +688,19 @@ async def hr_stats(_hr: dict = Depends(require_role("hr"))):
         by_stage[row["_id"]] = row["count"]
     total_app = await db.applications.count_documents({})
     total_pos = await db.positions.count_documents({})
-    total_pelamar = await db.users.count_documents({"role": "pelamar"})
+    # Pelamar aktif: punya minimal 1 lamaran dengan stage != rejected
+    active_ids = await db.applications.distinct("applicant_id", {"stage": {"$ne": "rejected"}})
+    total_pelamar_active = len(active_ids)
+    total_pelamar_all = await db.users.count_documents({"role": "pelamar"})
     accepted = by_stage.get("accepted", 0)
+    rejected = by_stage.get("rejected", 0)
     return {
         "by_stage": by_stage,
         "total_applications": total_app,
         "total_positions": total_pos,
-        "total_pelamar": total_pelamar,
+        "total_pelamar": total_pelamar_active,       # aktif (default yang ditampilkan)
+        "total_pelamar_all": total_pelamar_all,      # seluruh user pelamar terdaftar
+        "rejected": rejected,
         "accepted": accepted,
     }
 
