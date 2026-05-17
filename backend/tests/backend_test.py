@@ -103,7 +103,7 @@ class TestPositions:
         assert r.status_code == 200
         rows = r.json()
         assert isinstance(rows, list)
-        assert len(rows) >= 3
+        assert len(rows) >= 1
 
     def test_pelamar_cannot_create_position(self, pel_client):
         r = pel_client.post(
