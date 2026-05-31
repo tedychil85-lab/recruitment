@@ -538,49 +538,64 @@ async def saw_info():
     }
 
 
+def _saw_extrema(rows: list, criteria: list) -> tuple[dict, dict]:
+    """Compute max (for benefit) and min-of-positives (for cost) per criterion."""
+    matrix = {c: [(r.scores.get(c, 0) or 0) for r in rows] for c in criteria}
+    maxv = {c: (max(matrix[c]) if matrix[c] else 0) for c in criteria}
+    minv = {
+        c: (min([v for v in matrix[c] if v > 0]) if any(v > 0 for v in matrix[c]) else 0)
+        for c in criteria
+    }
+    return maxv, minv
+
+
+def _normalize_one(value: float, ctype: str, maxv: float, minv: float) -> float:
+    """SAW normalization for a single value (benefit: x/max, cost: min/x)."""
+    if ctype == "benefit":
+        return value / (maxv or 1)
+    return (minv / value) if value > 0 else 0
+
+
+def _score_candidate(row, criteria: list, maxv: dict, minv: dict) -> tuple[float, dict, dict]:
+    """Compute normalized matrix, weighted matrix and V_i for one candidate."""
+    normalized, weighted = {}, {}
+    v_total = 0.0
+    for c in criteria:
+        cfg = SAW_CRITERIA[c]
+        x = row.scores.get(c, 0) or 0
+        norm = _normalize_one(x, cfg["type"], maxv[c], minv[c])
+        w = cfg["weight"] * norm
+        normalized[c] = round(norm, 4)
+        weighted[c] = round(w, 4)
+        v_total += w
+    return round(v_total, 4), normalized, weighted
+
+
 @api.get("/saw/ranking")
 async def saw_ranking(position_id: Optional[str] = None,
                       _hr: dict = Depends(require_role("hr")),
                       session: AsyncSession = Depends(get_session)):
-    # Filter: must have scores AND not yet accepted
+    # 1. Fetch eligible candidates (have scores, not yet accepted)
     q = select(ApplicationM).where(ApplicationM.stage != "accepted")
     if position_id:
         q = q.where(ApplicationM.position_id == position_id)
-    rows = (await session.scalars(q)).all()
-    rows = [r for r in rows if r.scores]
+    rows = [r for r in (await session.scalars(q)).all() if r.scores]
     if not rows:
         return []
 
+    # 2. Compute extrema and per-candidate scores
     criteria = list(SAW_CRITERIA.keys())
-    matrix = {c: [(r.scores.get(c, 0) or 0) for r in rows] for c in criteria}
-    maxv = {c: (max(matrix[c]) if matrix[c] else 0) for c in criteria}
-    minv = {c: (min([v for v in matrix[c] if v > 0]) if any(v > 0 for v in matrix[c]) else 0) for c in criteria}
-
+    maxv, minv = _saw_extrema(rows, criteria)
     ranked = []
     for r in rows:
-        normalized, weighted = {}, {}
-        v_total = 0.0
-        for c in criteria:
-            cfg = SAW_CRITERIA[c]
-            x = r.scores.get(c, 0) or 0
-            if cfg["type"] == "benefit":
-                norm = x / (maxv[c] or 1)
-            else:  # cost
-                norm = (minv[c] / x) if x > 0 else 0
-            normalized[c] = round(norm, 4)
-            w = cfg["weight"] * norm
-            weighted[c] = round(w, 4)
-            v_total += w
-        v_total = round(v_total, 4)
+        v_total, normalized, weighted = _score_candidate(r, criteria, maxv, minv)
         r.saw_score = v_total
         enriched = _to_app_out(r).model_dump()
-        enriched["saw_score"] = v_total
-        enriched["normalized"] = normalized
-        enriched["weighted"] = weighted
+        enriched.update(saw_score=v_total, normalized=normalized, weighted=weighted)
         ranked.append(enriched)
-
     await session.commit()
 
+    # 3. Sort & assign ranks
     ranked.sort(key=lambda x: x["saw_score"], reverse=True)
     for i, row in enumerate(ranked):
         row["rank"] = i + 1

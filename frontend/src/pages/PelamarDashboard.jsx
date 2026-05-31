@@ -235,8 +235,9 @@ export default function PelamarDashboard() {
                   <div className="space-y-3" data-testid="history-list">
                     {[...(selected.history || [])].reverse().map((h, i) => {
                       const s = STAGE_BY_KEY[h.stage];
+                      const key = `${h.stage}-${h.at}-${i}`;
                       return (
-                        <div key={i} className="flex gap-3 items-start" data-testid={`history-item-${i}`}>
+                        <div key={key} className="flex gap-3 items-start" data-testid={`history-item-${i}`}>
                           <div className="w-9 h-9 rounded-full grid place-items-center shrink-0"
                                style={{ background: s?.bg, color: s?.text, border: `1px solid ${s?.border}` }}>
                             {s?.icon ? <s.icon size={16} /> : <ClipboardList size={16} />}

@@ -19,7 +19,9 @@ export default function NotificationBell() {
     try {
       const { data } = await api.get("/notifications");
       setItems(data);
-    } catch { /* noop */ }
+    } catch (err) {
+      console.warn("notifications load failed:", err.message);
+    }
   };
 
   useEffect(() => {

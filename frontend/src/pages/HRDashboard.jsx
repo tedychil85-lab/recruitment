@@ -1078,8 +1078,9 @@ function CandidateDetailDialog({ app, onClose, onChanged, onDelete, currentUser 
                 <div className="space-y-2">
                   {[...(a.history || [])].reverse().map((h, i) => {
                     const s = STAGE_BY_KEY[h.stage];
+                    const key = `${h.stage}-${h.at}-${i}`;
                     return (
-                      <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-100">
+                      <div key={key} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-100">
                         <div className="w-7 h-7 rounded-md grid place-items-center"
                              style={{ background: s?.bg, color: s?.text, border: `1px solid ${s?.border}` }}>
                           <ClipboardList size={14} />

@@ -24,8 +24,7 @@ async def get_session() -> AsyncSession:
 
 
 async def init_db() -> None:
-    """Create all tables (idempotent)."""
-    # Import inside function to avoid circular imports
-    from models import Base as _Base  # noqa: F401
+    """Create all tables (idempotent). Models must be imported elsewhere
+    before this runs so SQLAlchemy is aware of all mappers."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
